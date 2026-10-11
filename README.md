@@ -4,9 +4,34 @@ Capture any **screen**, **app window** or **region** in true HDR, or tone-map it
 
 Most screenshot tools capture 8-bit and clip everything brighter than SDR white, so HDR games and videos come out blown-out or washed-out. This app captures the desktop's real FP16 scRGB data through Windows.Graphics.Capture. It keeps the HDR values, and when you need an ordinary PNG/JPG it tone-maps them with a proper curve instead of clipping.
 
+![The Capture tab with a Limbus Company capture in the preview](docs/ui-capture.png)
+
+## Example capture
+
 ![Limbus Company captured in HDR and tone-mapped to SDR](docs/limbus-sdr.jpg)
 
-*Limbus Company, captured with **App** mode on an HDR monitor: 3840 × 2160, peak 993 nits, 7% of the frame brighter than SDR white (188 nits). Shown above tone-mapped with **Natural**. On an HDR display, open [the HDR PNG](docs/limbus-hdr.png) (1080p, BT.2020 PQ) in Chrome or Edge to see the real highlights.*
+*Limbus Company, captured with **App** mode on an HDR monitor: 3840 × 2160, peak 993 nits, 7% of the frame brighter than SDR white (188 nits). Shown above tone-mapped with **Natural**. On an HDR display, open [the HDR PNG](docs/limbus-hdr.png) (1080p, BT.2020 PQ) in the app's HDR Viewer tab, or in Chrome or Edge, to see the real highlights.*
+
+## HDR Viewer tab
+
+![The HDR Viewer tab in Split mode: HDR on the left, tone-mapped SDR on the right](docs/ui-viewer.png)
+
+Windows Photos shows HDR PNGs washed out, and most editors can't show HDR at all, so the app has its own viewer. It draws through an FP16 scRGB swap chain, so on an HDR monitor you see the real highlight brightness inside the app.
+
+- **What it opens**
+  - Your latest capture.
+  - **JXR** files, including Xbox Game Bar captures.
+  - **HDR PNG** (PQ or HLG, as written by this app, Chrome or cameras).
+  - Ordinary PNG, JPG, BMP, TIFF and WebP files.
+
+  Use **Open image…** or drop a file anywhere on the window.
+- **Show**
+  - **HDR**: the captured light levels, exactly as they were on screen.
+  - **Tone-mapped**: what the SDR export will look like, with the tone mapping and exposure set on the Capture tab.
+  - **Split**: HDR on the left, tone-mapped on the right. Drag the white divider to compare.
+- **Zoom**: Fit or 100%. Scroll to zoom around the cursor, drag to pan.
+- **Display check**: tells you whether the window is on an HDR display. On an SDR monitor, highlights clip, so move the window to your HDR screen.
+- **Convert files**: a file opened here becomes the current image, so you can save it in another format from the Capture tab. For example, you can turn a Game Bar `.jxr` into a tone-mapped PNG for Discord.
 
 ## Features
 
@@ -22,11 +47,7 @@ Most screenshot tools capture 8-bit and clip everything brighter than SDR white,
   - **Filmic** (Hable), **Reinhard**, or **Clip** (no tone mapping).
   - Exposure slider (±3 EV) and a live preview.
   - **Show HDR areas** stripes every pixel brighter than SDR white, so you can see what tone mapping affects.
-- **HDR Viewer tab**: shows captures and HDR files in real HDR inside the app, without depending on Photos or Krita.
-  - Opens JXR (including Game Bar captures), HDR PNG (PQ or HLG) and normal images. You can also drag a file onto the window.
-  - **HDR / Tone-mapped / Split** views, with a draggable divider to compare the HDR original against the SDR export.
-  - Scroll to zoom, drag to pan.
-  - A file opened here becomes the current image, so you can re-export it from the Capture tab, for example to turn a Game Bar `.jxr` into a tone-mapped PNG.
+- **[HDR Viewer tab](#hdr-viewer-tab)**: view captures and HDR files in real HDR, with an HDR vs tone-mapped split view.
 - Reads each monitor's **SDR white level** and **peak brightness**, so SDR UI in the shot keeps its brightness.
 - **Global hotkeys**: `Ctrl+Alt+S` region · `Ctrl+Alt+W` active window · `Ctrl+Alt+F` screen under the cursor.
 - Optional **auto-save** and **copy to clipboard**. A small toast confirms hotkey captures without stealing focus from your game.
