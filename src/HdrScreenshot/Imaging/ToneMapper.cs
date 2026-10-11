@@ -128,6 +128,32 @@ public static class ToneMapper
         return dst;
     }
 
+    /// <summary>
+    /// Turns a tone-mapped sRGB BGRA buffer back into scRGB FP16, with white at <paramref name="whiteNits"/>,
+    /// so the HDR viewer can show exactly what the SDR export will look like on this display.
+    /// </summary>
+    public static ushort[] SdrToScRgb(byte[] bgra, double whiteNits)
+    {
+        var lut = new ushort[256];
+        for (int i = 0; i < 256; i++)
+        {
+            double v = i / 255.0;
+            double lin = v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+            lut[i] = BitConverter.HalfToUInt16Bits((Half)(lin * whiteNits / 80.0));
+        }
+        ushort one = BitConverter.HalfToUInt16Bits((Half)1f);
+        var dst = new ushort[bgra.Length];
+        Parallel.For(0, bgra.Length / 4 / 8192 + 1, chunk =>
+        {
+            int start = chunk * 8192 * 4, end = Math.Min(bgra.Length, start + 8192 * 4);
+            for (int i = start; i < end; i += 4)
+            {
+                dst[i] = lut[bgra[i + 2]]; dst[i + 1] = lut[bgra[i + 1]]; dst[i + 2] = lut[bgra[i]]; dst[i + 3] = one;
+            }
+        });
+        return dst;
+    }
+
     private static byte Encode(float v)
     {
         if (!(v > 0)) return 0;

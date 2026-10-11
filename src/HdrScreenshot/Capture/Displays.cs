@@ -18,6 +18,8 @@ public sealed record DisplayInfo(
     public string Summary =>
         $"{Bounds.Width} × {Bounds.Height}  ·  " +
         (HdrEnabled ? $"HDR on  ·  {PeakNits:0} nits peak" : "SDR");
+
+    public override string ToString() => FriendlyName;
 }
 
 /// <summary>Monitor discovery: GDI bounds + DisplayConfig names/SDR white level + DXGI HDR luminance.</summary>

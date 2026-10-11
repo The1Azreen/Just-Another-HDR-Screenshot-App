@@ -33,6 +33,10 @@ public partial class MainWindow : Window
     private bool _rendering, _renderPending;
     private string? _lastSaved;
 
+    private HdrView? _hdrView;
+    private bool _viewerDirty;
+    private double _viewerWhite;
+
     private Point? _panStart;
     private Point _panOrigin;
 
@@ -43,7 +47,8 @@ public partial class MainWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closing += OnClosing;
-        Activated += (_, _) => { if (!_loading && !_busy) RefreshDisplays(); };
+        Activated += (_, _) => { if (!_loading && !_busy) { RefreshDisplays(); UpdateDisplayNotice(); } };
+        LocationChanged += (_, _) => UpdateDisplayNotice();
         PreviewKeyDown += OnKeyDown;
     }
 
@@ -98,6 +103,7 @@ public partial class MainWindow : Window
         }
 
         RefreshDisplays();
+        CreateHdrView();
         _loading = false;
     }
 
@@ -351,13 +357,7 @@ public partial class MainWindow : Window
     /// <summary>Shows a new capture and runs the auto-save / clipboard actions.</summary>
     private async Task Deliver(HdrImage img, bool fromHotkey)
     {
-        _image = img;
-        _stats = await Task.Run(() => ToneMapper.Analyze(img));
-        _lastSaved = null;
-        UpdateImageInfo();
-        UpdateOutputButtons();
-        SetStatus("", "Faint");
-        await RenderPreview();
+        await SetCurrentImage(img);
 
         var notes = new List<string>();
         if (_settings.CopyToClipboard && await CopySdr()) notes.Add("copied to clipboard");
@@ -370,12 +370,26 @@ public partial class MainWindow : Window
 
         if (fromHotkey && notes.Count > 0 && _bitmap != null)
         {
-            string title = _stats.HasHdrContent ? "HDR screenshot captured" : "Screenshot captured";
+            string title = _stats?.HasHdrContent == true ? "HDR screenshot captured" : "Screenshot captured";
             string detail = char.ToUpper(notes[0][0]) + string.Join(", ", notes)[1..];
             string? reveal = files?.FirstOrDefault();
             Toast.Show(_bitmap, title, detail, () => { if (reveal != null) RevealFile(reveal); else BringToFront(); });
         }
         else if (fromHotkey) BringToFront();
+    }
+
+    /// <summary>Makes <paramref name="img"/> the image both tabs work on (preview, export, HDR viewer).</summary>
+    private async Task SetCurrentImage(HdrImage img)
+    {
+        _image = img;
+        _stats = await Task.Run(() => ToneMapper.Analyze(img));
+        _lastSaved = null;
+        UpdateImageInfo();
+        UpdateOutputButtons();
+        SetStatus("", "Faint");
+        await RenderPreview();
+        _viewerDirty = true;
+        if (TabViewer.IsChecked == true) await RefreshViewer();
     }
 
     private void BringToFront()
@@ -484,6 +498,7 @@ public partial class MainWindow : Window
                           : sender == TmClip ? ToneMapMode.Clip : ToneMapMode.Natural;
         if (ToneHint != null) ToneHint.Text = ToneMapper.Describe(_settings.ToneMap);
         _ = RenderPreview();
+        ToneMapChangedForViewer();
     }
 
     private void Exposure_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -491,6 +506,7 @@ public partial class MainWindow : Window
         _settings.Exposure = Math.Round(e.NewValue, 1);
         UpdateExposureLabel();
         _ = RenderPreview();
+        ToneMapChangedForViewer();
     }
 
     private void Exposure_Reset(object sender, MouseButtonEventArgs e) => ExposureSlider.Value = 0;
@@ -619,5 +635,159 @@ public partial class MainWindow : Window
     {
         SaveStatus.Text = text;
         SaveStatus.Foreground = (Brush)FindResource(brushKey);
+    }
+
+    // ================================================================== HDR viewer
+
+    private void CreateHdrView()
+    {
+        try
+        {
+            _hdrView = new HdrView();
+            _hdrView.ViewChanged += () => ViewerZoom.Text = _hdrView.HasImage ? $"{_hdrView.Zoom * 100:0}%" : "";
+            _hdrView.FileDropped += path => _ = OpenFile(path);
+            HdrHost.Child = _hdrView;
+        }
+        catch (Exception ex)
+        {
+            _hdrView = null;
+            ViewerInfo.Text = "The HDR viewer couldn't start: " + ex.Message;
+        }
+        UpdateViewModeText();
+    }
+
+    private void Tab_Checked(object sender, RoutedEventArgs e)
+    {
+        if (CapturePage == null || ViewerPage == null) return;
+        bool viewer = TabViewer.IsChecked == true;
+        CapturePage.Visibility = viewer ? Visibility.Collapsed : Visibility.Visible;
+        ViewerPage.Visibility = viewer ? Visibility.Visible : Visibility.Collapsed;
+        if (viewer)
+        {
+            UpdateDisplayNotice();
+            if (_viewerDirty || _viewerWhite != DisplayWhiteForViewer()) _ = RefreshViewer();
+        }
+    }
+
+    private void ViewHdr_Click(object sender, RoutedEventArgs e) => TabViewer.IsChecked = true;
+
+    /// <summary>SDR white of the monitor this window is on; on an SDR monitor scRGB 1.0 is display white.</summary>
+    private double DisplayWhiteForViewer()
+    {
+        if (_hwnd == IntPtr.Zero) return 80;
+        var d = Displays.ForWindow(_hwnd);
+        return d.HdrEnabled ? d.SdrWhiteNits : 80;
+    }
+
+    private async Task RefreshViewer()
+    {
+        if (_hdrView == null) return;
+        if (_image == null || _stats == null)
+        {
+            ViewerEmpty.Visibility = Visibility.Visible;
+            HdrHost.Visibility = Visibility.Hidden;
+            return;
+        }
+        var img = _image; var stats = _stats; var tm = CurrentToneMap();
+        double white = DisplayWhiteForViewer();
+        var sdr = await Task.Run(() => ToneMapper.SdrToScRgb(ToneMapper.ToSdrBgra(img, stats, tm), white));
+        if (img != _image) return;
+        _viewerDirty = false;
+        _viewerWhite = white;
+        ViewerEmpty.Visibility = Visibility.Collapsed;
+        HdrHost.Visibility = Visibility.Visible;
+        _hdrView.SetImages(img, sdr, white);
+
+        ViewerName.Text = img.SourceName;
+        string light = stats.HasHdrContent
+            ? $"Peak {stats.PeakNits:N0} nits  ·  {Percent(stats.FractionAboveWhite)} brighter than SDR white"
+            : "No highlights above SDR white";
+        ViewerInfo.Text = $"{img.Width} × {img.Height}\n{light}";
+        UpdateViewModeText();
+    }
+
+    private async void ToneMapChangedForViewer()
+    {
+        UpdateViewModeText();
+        if (_hdrView == null || _image == null || _stats == null) return;
+        if (TabViewer.IsChecked != true) { _viewerDirty = true; return; }
+        var img = _image; var stats = _stats; var tm = CurrentToneMap(); double white = _viewerWhite;
+        var sdr = await Task.Run(() => ToneMapper.SdrToScRgb(ToneMapper.ToSdrBgra(img, stats, tm), white));
+        if (img == _image) _hdrView.SetSdr(sdr);
+    }
+
+    private void ViewMode_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_hdrView == null) return;
+        _hdrView.Mode = ViewSplit.IsChecked == true ? ViewMode.Split : ViewSdr.IsChecked == true ? ViewMode.ToneMapped : ViewMode.Hdr;
+        UpdateViewModeText();
+    }
+
+    private void UpdateViewModeText()
+    {
+        if (ViewModeHint == null) return;
+        string tm = $"{_settings.ToneMap}, {(_settings.Exposure == 0 ? "0.0" : _settings.Exposure.ToString("+0.0;-0.0"))} EV";
+        var mode = _hdrView?.Mode ?? ViewMode.Hdr;
+        ViewModeHint.Text = mode switch
+        {
+            ViewMode.Hdr => "The captured light levels, exactly as they were on screen.",
+            ViewMode.ToneMapped => $"What the SDR export looks like ({tm}). Change it on the Capture tab.",
+            _ => "Left: HDR. Right: tone-mapped. Drag the white divider to compare.",
+        };
+        ViewerFooter.Text = _image == null || _stats == null ? "" : mode switch
+        {
+            ViewMode.Hdr => _stats.HasHdrContent ? $"Showing HDR: highlights up to {_stats.PeakNits:N0} nits" : "Showing HDR (this image has no highlights above SDR white)",
+            ViewMode.ToneMapped => $"Showing the tone-mapped SDR version ({tm})",
+            _ => $"HDR  |  Tone-mapped ({tm})",
+        };
+    }
+
+    private void UpdateDisplayNotice()
+    {
+        if (_hwnd == IntPtr.Zero || DisplayNotice == null) return;
+        var d = Displays.ForWindow(_hwnd);
+        DisplayNotice.BorderBrush = (Brush)FindResource(d.HdrEnabled ? "Good" : "Warn");
+        DisplayNoticeText.Text = d.HdrEnabled
+            ? $"This window is on {d.FriendlyName} with HDR on ({d.PeakNits:0} nits peak), so you're seeing real HDR."
+            : $"This window is on {d.FriendlyName}, which is in SDR mode, so highlights will clip. Move the window to an HDR display or turn on HDR in Settings › Display.";
+        if (TabViewer.IsChecked == true && _image != null && _viewerWhite != DisplayWhiteForViewer()) _ = RefreshViewer();
+    }
+
+    private void ViewerFit_Click(object sender, RoutedEventArgs e) => _hdrView?.ZoomToFit();
+    private void ViewerActual_Click(object sender, RoutedEventArgs e) => _hdrView?.ZoomActual();
+
+    private void OpenImage_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Open an image", Filter = ImageLoader.DialogFilter };
+        if (dlg.ShowDialog(this) == true) _ = OpenFile(dlg.FileName);
+    }
+
+    private void Window_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Window_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files) _ = OpenFile(files[0]);
+    }
+
+    private async Task OpenFile(string path)
+    {
+        if (_busy) return;
+        var d = Displays.ForWindow(_hwnd);
+        double white = d.HdrEnabled ? d.SdrWhiteNits : Displays.ReferenceWhiteNits;
+        try
+        {
+            var img = await Task.Run(() => ImageLoader.Load(path, white));
+            TabViewer.IsChecked = true;
+            await SetCurrentImage(img);
+        }
+        catch (Exception ex)
+        {
+            TabViewer.IsChecked = true;
+            ViewerInfo.Text = $"Couldn't open {Path.GetFileName(path)}: {ex.Message}";
+        }
     }
 }

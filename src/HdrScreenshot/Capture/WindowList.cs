@@ -15,6 +15,7 @@ public sealed class WindowInfo
     public required string AppName { get; init; }
     public ImageSource? Icon { get; init; }
     public string Initial => string.IsNullOrEmpty(AppName) ? "?" : AppName[..1].ToUpperInvariant();
+    public override string ToString() => $"{Title} ({AppName})";   // screen readers / UI Automation
 }
 
 /// <summary>Alt-Tab style list of top-level windows that can be captured.</summary>

@@ -17,7 +17,7 @@ public static class Exporters
     public static string Describe(ExportFormat f) => f switch
     {
         ExportFormat.Jxr => "JPEG XR keeps the full FP16 HDR capture losslessly. Opens in HDR in Windows Photos and Game Bar's gallery.",
-        ExportFormat.HdrPng => "16-bit PNG in BT.2020 PQ (cICP tagged). Shows in HDR in Chrome, Edge and other HDR-aware viewers.",
+        ExportFormat.HdrPng => "16-bit BT.2020 PQ PNG. HDR in Chrome and Edge, but Windows Photos ignores the HDR tag and shows it washed out (use JXR there).",
         ExportFormat.Png => "Tone-mapped 8-bit sRGB PNG. Looks right everywhere: Discord, browsers, editors.",
         ExportFormat.Jpg => "Tone-mapped sRGB JPEG at quality 95. Small files for sharing.",
         _ => "Both: a lossless HDR .jxr plus a tone-mapped SDR .png side by side.",
