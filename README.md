@@ -12,6 +12,10 @@ Most screenshot tools capture 8-bit and clip everything brighter than SDR white,
 
 *Limbus Company, captured with **App** mode on an HDR monitor: 3840 × 2160, peak 993 nits, 7% of the frame brighter than SDR white (188 nits). Shown above tone-mapped with **Natural**. On an HDR display, open [the HDR PNG](docs/limbus-hdr.png) (1080p, BT.2020 PQ) in the app's HDR Viewer tab, or in Chrome or Edge, to see the real highlights.*
 
+![Fire Emblem: Fortune's Weave captured in HDR and tone-mapped to SDR](docs/fe-fortune-weave-sdr.jpg)
+
+*Fire Emblem: Fortune's Weave: 3840 × 2160, peak 1,489 nits, 72% of the frame brighter than SDR white (188 nits). Shown above tone-mapped with **Natural**. On an HDR display, open [the HDR PNG](docs/fe-fortune-weave-hdr.png) (1080p, BT.2020 PQ) in the app's HDR Viewer tab, or in Chrome or Edge, to see the real highlights.*
+
 ## HDR Viewer tab
 
 ![The HDR Viewer tab in Split mode: HDR on the left, tone-mapped SDR on the right](docs/ui-viewer.png)
